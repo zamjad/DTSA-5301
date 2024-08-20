@@ -206,3 +206,14 @@ ggplot(us, aes(x = date, y = cases)) +
   geom_smooth(method = "lm", se = FALSE, linetype = "dashed", color = "blue") + 
   theme_minimal()
 ```
+
+## Bais
+
+It is bais to assume that the higher the number of cases the higher the death, which may be true initially but not after some time. 
+Another important bias not all countries are reporting data correctly, so less number is not equal to less number of cases.  
+
+## Conclusion
+
+Although this data set is a good starting point, but we need to do the further investigation before making any conclusion. We also have some missing data, therefore it is important to have good dataset before making any concludion. 
+
+We just did the linear modeling of the data which is not the true case, more realistic  approch may be to do a logistic regression. 
