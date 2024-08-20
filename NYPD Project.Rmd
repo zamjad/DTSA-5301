@@ -1,0 +1,194 @@
+---
+title: "NYD Shooting Project"
+author: "Zeeshan Amjad"
+date: "2024-08-10"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document for NYPD shooting project for Data Science as Field course.
+
+## Loading packages
+- tidyverse
+- dplyr
+- ggplot2
+
+```{r load packages, warning=FALSE, message=FALSE}
+library('tidyverse')
+library('dplyr')
+install.packages('ggplot2')
+```
+
+## Loading New York Shooting Data
+
+Read the data from the url <https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv>
+
+```{r load data}
+cases_url <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv"
+cases <- read_csv(cases_url)
+```
+
+## See the specification of the data
+
+Use spec() to see the full column specification to understand the data
+```{r spec}
+spec(cases)
+```
+
+## Preparing the data
+
+### Change the data type
+
+For preparing the data, change the date into date format
+
+```{r date}
+cases <- cases %>% 
+  mutate(
+    OCCUR_DATE = as.Date(OCCUR_DATE, "%m/%d/%Y"))
+```
+
+### Remove the unnecessary columns
+
+Remove the following from the data
+- X_COORD_CD
+- Y_COORD_CD
+- Latitude
+- Longitude
+- Lon_Lat
+
+```{r remove}
+cases <- cases %>% 
+  select(-c(X_COORD_CD, Y_COORD_CD, Latitude, Longitude, Lon_Lat))
+```
+## Display summary
+```{r cases summary}
+summary(cases)
+```
+
+## Group by
+
+### Group by one level
+
+Now doing the group by of one level, here we are doing group by 
+-- boro
+-- year
+-- location
+-- gender
+```{r group by one}
+group_by_boro <- cases %>%
+  group_by(BORO) %>%
+  summarise(INCIDENTS = n())
+
+group_by_year <- cases %>%
+  group_by(YEAR = format(OCCUR_DATE, "%Y")) %>%
+  summarise(INCIDENTS = n())
+
+group_by_location <- cases %>%
+  group_by(LOCATION_DESC) %>%
+  summarise(INCIDENTS = n())
+
+group_by_gender <- cases %>% 
+  filter(!is.na(cases$PERP_SEX)) %>% 
+  filter(if_any(everything(), is.na)) %>% 
+  group_by(PERP_SEX) %>%
+  summarise(INCIDENTS = n())
+```
+
+### Group by two levels
+
+Now doing the group by of two levels, here we are doing group by 
+-- boro, year
+-- year, boro
+-- location, year
+-- year, location
+
+```{r group by two}
+group_by_boro_year <- cases %>%
+  group_by(BORO, YEAR = format(OCCUR_DATE, "%Y")) %>%
+  summarise(INCIDENTS = n(), .groups="keep")
+
+group_by_year_boro <- cases %>%
+  group_by(YEAR = format(OCCUR_DATE, "%Y"), BORO) %>%
+  summarise(INCIDENTS = n(), .groups="keep")
+
+group_by_location_year <- cases %>%
+  group_by(LOCATION_DESC, , YEAR = format(OCCUR_DATE, "%Y")) %>%
+  summarise(INCIDENTS = n(), .groups="keep")
+
+group_by_year_location <- cases %>%
+  group_by(YEAR = format(OCCUR_DATE, "%Y"), LOCATION_DESC) %>%
+  summarise(INCIDENTS = n(), .groups="keep")
+```
+
+## Visualize Data
+
+Now visualization the data of NYPD shooting incidents
+
+### incident by boro
+
+```{r plot shootings group_by_boro}
+barplot(group_by_boro$INCIDENTS, names.arg = group_by_boro$BORO, 
+        col = "blue", cex.names = 0.7, main = "Incident by Boro", 
+        xlab = "Boro", ylab = "Incident")
+```
+### incident by year
+
+```{r plot shootings group_by_year}
+barplot(group_by_year$INCIDENTS, names.arg = group_by_year$YEAR, 
+        col = "green", cex.names = 0.7, main = "Incident by Year", 
+        xlab = "Year", ylab = "Incident")
+```
+
+### incident by location
+
+```{r plot shootings group_by_location}
+barplot(group_by_location$INCIDENTS, names.arg = group_by_location$LOCATION_DESC, 
+        col = "red", las=2, cex.names = 0.4, main = "Incident by Location", ylab = "Incident")
+```
+
+### gender breakdown
+
+```{r plot shootings group_by_gender}
+pie(group_by_gender$INCIDENTS, labels = group_by_gender$PERP_SEX, 
+    main = "Gender break down", col = rainbow(length(group_by_gender$INCIDENTS)))
+```
+
+### incident by boro ever year
+
+```{r plot shootings group_by_boro_year}
+group_by_boro_year  %>%
+     ggplot(aes(x=YEAR, y=INCIDENTS, group = BORO)) +
+     geom_line(aes(color = BORO)) +
+     geom_point(aes(color = BORO)) +
+     theme(legend.position = "bottom",
+           axis.text.x = element_text(angle = 90)) +
+     labs(title = "Shootings by Borough every year")
+```
+
+These visualization shows that there are less number of shooting incident on Staten Island boro making it the safest and most number of shooting incident in Brooklyn. It also shows that Male are more likely to be a perpetrator than female. 
+
+When we visualize the data over time then for year 2017 to 2019 the shooting incident decreases and it is also evident if we look at the for each boro over the time. 
+
+One possible hypothesis could be since Staten Island is not directly connected with land except two bridges, therefore it would be difficult for shooter to escape from there. However we need to further investigate to validate or invalidate this hypothesis. 
+
+Another important observation is the time frame of 2017 to 2019, the number of shooting instances reduces in all boro and further investigation needed to understand the reason behind this. There may be another factor that may cause this. 
+
+We can further explore the relationship between location and number of shooting incident, but we have lots of missing data for location, so we can't make a concrete decision based on the existing data.
+
+## Bais
+
+It is bais to assume that number of shooting is less on Island as compare to main land. 
+Another important bais maight be who is doing this shooting? It is from the law enforcement or crimnal? Is there a really good law and order sitaution in staten island or the geography plays an important role here. 
+
+## Conclusion
+
+Although this dataset provide useful information and we can get new insight by grouping and visualization this, but this data is not sufficient to create any meaningful conclusion. There are two important reason for that
+- Some important data points are missing like location for lots of rows and who did the shooting, law enforcement, criminal or someone else
+- We may need to include some other datasets in our study to come up with some meaningful conclusion or even can find the missing link, relationship, causation in the current dataset. 
