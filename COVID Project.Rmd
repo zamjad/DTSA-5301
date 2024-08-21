@@ -1,0 +1,242 @@
+---
+title: "COVID Cases Project"
+author: "Zeeshan Amjad"
+date: "2024-08-19"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document for NYPD shooting project for Data Science as Field course.
+
+## Loading packages
+- tidyverse
+- dplyr
+- ggplot2
+
+```{r load packages, warning=FALSE, message=FALSE}
+library('tidyverse')
+library('dplyr')
+library(lubridate)
+install.packages('ggplot2')
+```
+
+## Loading COVID Data
+
+Read the data from the url 
+
++ <https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv>
++ <https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv>
++ <https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv>
++ <https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv>
++ <https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_recovered_global.csv>
+```{r load data}
+us_confirmed_cases_url <- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv"
+us_confirmed_cases <- read_csv(us_confirmed_cases_url)
+global_confirmed_cases_url <- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv"
+global_confirmed_cases <- read_csv(global_confirmed_cases_url)
+us_death_cases_url <- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv"
+us_death_cases <- read_csv(us_death_cases_url)
+global_death_cases_url <- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv"
+global_death_cases <- read_csv(global_death_cases_url)
+global_recovered_cases_url <- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_recovered_global.csv"
+global_recovered_cases <- read_csv(global_recovered_cases_url)
+```
+
+## Preparing the data
+
+### tidying the data
+
+```{r pivot data}
+us_confirmed_cases <- us_confirmed_cases %>% 
+  select(-c('UID', 'iso2', 'iso3', 'code3', 
+            'FIPS', 'Admin2', 'Country_Region', 'Lat', 'Long_', 'Combined_Key')) %>%
+  rename('State/Territory' = 'Province_State') %>%
+  pivot_longer(col = -'State/Territory', names_to = 'date', values_to = 'cases') %>%
+  mutate(date=mdy(date))
+
+us_death_cases <- us_death_cases %>% 
+  select(-c('UID', 'iso2', 'iso3', 'code3', 
+            'FIPS', 'Admin2', 'Country_Region', 'Lat', 'Long_', 'Combined_Key')) %>%
+  rename('State/Territory' = 'Province_State') %>%
+  pivot_longer(col = -'State/Territory', names_to = 'date', values_to = 'deaths') %>%
+  mutate(date=mdy(date))
+
+global_confirmed_cases <- global_confirmed_cases %>% 
+  pivot_longer(cols = -c('Province/State', 'Country/Region', Lat, Long),
+               names_to = 'date', values_to = 'cases') %>% 
+  select(-c(Lat, Long))
+
+global_death_cases <- global_death_cases %>% 
+  pivot_longer(cols = -c('Province/State', 'Country/Region', Lat, Long),
+               names_to = 'date', values_to = 'deaths') %>% 
+  select(-c(Lat, Long))
+
+global_recovered_cases <- global_recovered_cases %>% 
+  pivot_longer(cols = -c('Province/State', 'Country/Region', Lat, Long),
+               names_to = 'date', values_to = 'recovered') %>% 
+  select(-c(Lat, Long))
+```
+
+### transforming the data
+
+```{r transform data}
+global <- global_confirmed_cases %>% 
+  full_join(global_death_cases) %>% 
+  full_join(global_recovered_cases) %>% 
+  mutate(date=mdy(date))
+```
+
+### filter the date
+```{r filter data}
+global <- global %>% 
+  filter(cases > 0)
+```
+
+### summary the data
+```{r summary data}
+summary(global)
+```
+
+## Group by
+
+```{r group by one}
+group_by_country <- global %>%
+  group_by(global$`Country/Region`) %>%
+  summarise(cases = sum(cases), 
+            deaths = sum(deaths), 
+            recovered=sum(recovered))
+
+group_by_date <- global %>%
+  group_by(global$date) %>%
+  summarise(cases = sum(cases, na.rm=TRUE), 
+            deaths = sum(deaths, na.rm=TRUE), 
+            recovered=sum(recovered, na.rm=TRUE))
+
+us_confirmed_by_state <- us_confirmed_cases %>%
+  group_by(`State/Territory`, date) %>% 
+  summarise(cases = sum(cases))
+
+us_confirmed_by_state <- na.omit(us_confirmed_by_state)
+
+us_death_by_state <- us_death_cases %>% 
+  group_by(`State/Territory`, date) %>% 
+  summarise(deaths = sum(deaths))
+
+us_death_by_state <- na.omit(us_death_by_state)
+
+us <- us_confirmed_by_state %>% full_join(us_death_by_state)
+```
+
+## Visualization
+
+```{r, Visualization by country}
+summary_by_country <- group_by_country %>%
+  pivot_longer(cols = c(cases, deaths, recovered),
+               names_to = "category", values_to = "count")
+
+ggplot(summary_by_country, 
+       aes(x = summary_by_country$`global$\`Country/Region\``, 
+           y = count, fill = category)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Total Cases, Deaths, and Recovered by Country",
+       x = "Country", y = "Count") +
+  theme_minimal()
+```
+
+We are trying to create a visualization by country, but it is not very useful. Now trying to visualize the data of the first year of COVID
+
+
+```{r, Visualization by firt year}
+global %>%
+  filter(date < '2020-12-31') %>%
+  ggplot() +
+  ylab("Cases Numbers") +
+  theme(legend.position = "none") +
+  scale_y_sqrt(labels = scales::unit_format(unit = "M")) +
+  geom_point(aes(date, cases, colour = 'Blue')) +
+  geom_point(aes(date, deaths), colour = 'Red') +
+  geom_point(aes(date, recovered), colour = 'Green') + 
+  labs(title = "COVID cases in first year", x="count", y="date")
+```
+
+Now trying to visualize the cases in the US
+```{r visualization cases in US}
+us %>% 
+  filter(cases > 0) %>% 
+  ggplot(aes(x = date, y = cases)) + 
+  geom_line(aes(color = "cases")) + 
+  geom_point(aes(color = "cases")) + 
+  geom_line(aes(y = deaths, color = "deaths")) + 
+  geom_point(aes(y = deaths, color = "deaths")) + 
+  theme(legend.position = "bottom", 
+        axis.text.x = element_text(angle = 90)) + 
+  labs(title = "COVID cases in US", x="count", y="date")
+```
+
+## Model
+
+Now creating a model for us
+
+```{r model us}
+us_model <- lm(us$cases ~ us$date, us)
+
+summary(us_model)
+```
+
+Now creating a model for global data
+```{r model global}
+global_model <- lm(global$cases ~ global$deaths, global)
+
+summary(global_model)
+```
+
+### plotting the model
+
+```{r visualization model}
+us$predict <- predict(us_model)
+
+ggplot(us, aes(x = date, y = cases)) +
+  geom_point(color = "red") + 
+  geom_smooth(method = "lm", se = FALSE, linetype = "dashed", color = "blue") + 
+  theme_minimal() + 
+  labs(title = "COVID cases in US by states", x="count", y="date")
+```
+
+### creating model for all us cases
+
+```{r model all us cases}
+all_us_cases <- us %>% 
+  group_by(date) %>% 
+  summarise(cases = sum(cases), 
+            deaths = sum(deaths))
+
+all_us_model <- lm(all_us_cases$cases ~ all_us_cases$date, all_us_cases)
+
+summary(all_us_model)
+
+all_us_cases$predict <- predict(all_us_model)
+
+ggplot(all_us_model, aes(x = all_us_cases$date, y = all_us_cases$cases)) +
+  geom_point(color = "red") + 
+  geom_smooth(method = "lm", se = FALSE, linetype = "dashed", color = "blue") + 
+  theme_minimal() + 
+  labs(title = "COVID cases in US", x="count", y="date")
+```
+
+## Bais
+
+It is bais to assume that the higher the number of cases the higher the death, which may be true initially but not after some time. 
+Another important bias not all countries are reporting data correctly, so less number is not equal to less number of cases.  
+
+## Conclusion
+
+Although this data set is a good starting point, but we need to do the further investigation before making any conclusion. We also have some missing data, therefore it is important to have good data set before making any conclusion. 
+
+We just did the linear modeling of the data which is not the true case, more realistic  approch may be to do a logistic regression. 
